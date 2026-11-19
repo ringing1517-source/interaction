@@ -24,3 +24,4 @@ B. GitHub Pages（长期稳定）
 C. Vercel / Cloudflare Pages 也可以，直接上传这个文件夹即可，不需要任何构建设置。
 
 放进 PowerPoint：部署后，用 PowerPoint 的 Web Viewer 加载项填入上面的 https 网址（可以填首页，也可以直接填某一张，例如 …/tear/）。
+
