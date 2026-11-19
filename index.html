@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>상관없어 · 三张可交互海报</title>
+<meta name="description" content="상관없어 / 상관없이：三张可交互海报——撕与缝、팝、Fractures in Indifference。">
+<meta property="og:title" content="상관없어 · 三张可交互海报">
+<meta property="og:description" content="撕开、吐字、碎裂：三种方式玩「无所谓」。">
+<meta property="og:image" content="thumbs/tear.webp">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #151413;
+  --bg-2: #1d1c1a;
+  --ink: #efe9df;
+  --muted: #9d968b;
+  --line: #34312d;
+  --accent: #e3482e;
+  --display: "Black Han Sans", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", -apple-system, system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--body);
+  padding: max(28px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(40px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.wrap { max-width: 1180px; margin: 0 auto; }
+header { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 12px 24px; padding: 24px 0 36px; border-bottom: 1px solid var(--line); }
+h1 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(56px, 11vw, 132px); line-height: .86; letter-spacing: -.01em; }
+.sub { margin: 14px 0 0; font-size: 15px; color: var(--muted); letter-spacing: .08em; }
+.count { font-family: var(--display); font-size: clamp(28px, 4vw, 44px); color: var(--muted); line-height: 1; text-align: right; }
+.count span { color: var(--ink); }
+
+.grid { list-style: none; margin: 36px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.card a { display: flex; flex-direction: column; height: 100%; color: inherit; text-decoration: none; border-radius: 4px; outline: none; }
+.thumb {
+  position: relative; aspect-ratio: 4 / 5; border-radius: 4px; overflow: hidden; display: grid; place-items: center;
+  background: var(--tb, var(--bg-2));
+  transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s;
+  box-shadow: 0 1px 0 rgba(255,255,255,.04) inset;
+}
+.thumb img { position: absolute; inset: 7%; width: 86%; height: 86%; object-fit: contain; display: block;
+  filter: drop-shadow(0 14px 22px rgba(0,0,0,.35)); transition: transform .5s cubic-bezier(.2,.8,.2,1); }
+.card a:hover .thumb img, .card a:focus-visible .thumb img { transform: scale(1.035) rotate(-.6deg); }
+.card a:focus-visible .thumb { box-shadow: 0 0 0 2px var(--ink); }
+.meta { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; padding: 18px 2px 0; }
+.no { grid-row: span 3; font-family: var(--display); font-size: 30px; line-height: 1; color: var(--muted); }
+.title { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.3; }
+.title .ko { font-family: var(--display); font-weight: 400; font-size: 21px; margin-right: 6px; }
+.how { margin: 0; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.go { margin-top: 6px; font-size: 13px; letter-spacing: .1em; color: var(--ink); display: inline-flex; align-items: center; gap: 6px; }
+.go::after { content: "→"; transition: transform .25s; }
+.card a:hover .go::after { transform: translateX(4px); }
+.card a:hover .go { color: var(--accent); }
+
+footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 22px; }
+}
+@media (max-width: 600px) {
+  header { grid-template-columns: 1fr; padding-top: 8px; padding-bottom: 26px; }
+  .count { text-align: left; }
+  .grid { grid-template-columns: 1fr; gap: 34px; margin-top: 26px; }
+  .thumb { aspect-ratio: auto; height: min(68svh, 560px); }
+}
+@media (prefers-reduced-motion: reduce) { .thumb img, .go::after { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>상관없어</h1>
+      <p class="sub">无所谓 · 三张可交互海报</p>
+    </div>
+    <div class="count" aria-hidden="true"><span>03</span> / 03</div>
+  </header>
+
+  <ul class="grid">
+    <li class="card">
+      <a href="tear/">
+        <div class="thumb" style="--tb:#1d1c1a"><img src="thumbs/tear.webp" alt="海报《상관없이》：白纸被斜向撕开，闪电状裂纹" loading="lazy"></div>
+        <div class="meta">
+          <span class="no">01</span>
+          <h2 class="title"><span class="ko">상관없이</span>撕与缝</h2>
+          <p class="how">顺着撕口从右往左滑动撕开、从左往右合上；在屏幕任意处滑动，纸会越揉越皱。</p>
+          <span class="go">打开海报</span>
+        </div>
+      </a>
+    </li>
+    <li class="card">
+      <a href="pop/">
+        <div class="thumb" style="--tb:#efe2cb"><img src="thumbs/pop.webp" alt="海报《상관없어 팝》：红橙色大字与三张嘴" loading="lazy"></div>
+        <div class="meta">
+          <span class="no">02</span>
+          <h2 class="title"><span class="ko">상관없어</span>팝</h2>
+          <p class="how">点一点嘴巴：字被吸进去、再一个个吐出来，撒出一阵彩纸。</p>
+          <span class="go">打开海报</span>
+        </div>
+      </a>
+    </li>
+    <li class="card">
+      <a href="fractures/">
+        <div class="thumb" style="--tb:#e3f1f4"><img src="thumbs/fractures.webp" alt="海报《Fractures in Indifference》：不断剥落的深灰色字体" loading="lazy"></div>
+        <div class="meta">
+          <span class="no">03</span>
+          <h2 class="title">Fractures in Indifference</h2>
+          <p class="how">滑过或点按字体，让它碎裂剥落；可调破碎强度，一键复原。</p>
+          <span class="go">打开海报</span>
+        </div>
+      </a>
+    </li>
+  </ul>
+
+  <footer>
+    <span>상관없어 / 상관없이</span>
+    <span>支持手机与电脑浏览</span>
+  </footer>
+</div>
+</body>
+</html>

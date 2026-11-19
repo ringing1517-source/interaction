@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fractures in Indifference · 상관없어</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #e3f1f4; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center;
+         font-family: -apple-system, "PingFang SC", "Noto Sans KR", "Helvetica Neue", Arial, sans-serif; }
+  #stage { position: relative; }
+  #stage > img, #stage > canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+  #c { touch-action: none; cursor: crosshair; }
+  #hint { position: absolute; left: 0; right: 0; top: 14px; text-align: center; pointer-events: none;
+          color: #2b4352; font-size: 13px; letter-spacing: .08em; opacity: .75; transition: opacity 1.2s ease; }
+  #hint b { font-weight: 600; letter-spacing: .14em; }
+  #hint.gone { opacity: 0; }
+  #reset { position: absolute; right: 14px; bottom: 14px; z-index: 2; padding: 8px 14px 8px 12px;
+           font: 500 13px/1 -apple-system, "PingFang SC", "Noto Sans KR", sans-serif; letter-spacing: .12em;
+           color: #e3f1f4; background: rgba(27, 44, 55, .82); border: 1px solid rgba(227, 241, 244, .35);
+           border-radius: 999px; cursor: pointer; display: flex; align-items: center; gap: 6px;
+           opacity: .45; transition: opacity .3s, background .3s, transform .15s; backdrop-filter: blur(2px); }
+  #reset.on { opacity: 1; }
+  #reset:hover { background: rgba(27, 44, 55, .95); }
+  #reset:active { transform: scale(.96); }
+  #reset:focus-visible { outline: 2px solid #1b2c37; outline-offset: 3px; }
+  #reset svg { width: 14px; height: 14px; }
+  #power { position: absolute; left: 14px; bottom: 14px; z-index: 2; display: flex; align-items: center; gap: 10px;
+           padding: 7px 14px; border-radius: 999px; color: #e3f1f4; background: rgba(27, 44, 55, .82);
+           border: 1px solid rgba(227, 241, 244, .35); backdrop-filter: blur(2px);
+           font: 500 13px/1 -apple-system, "PingFang SC", "Noto Sans KR", sans-serif; letter-spacing: .12em;
+           opacity: .7; transition: opacity .3s; }
+  #power:hover, #power:focus-within { opacity: 1; }
+  #power output { min-width: 1.4em; text-align: right; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+  #power input { -webkit-appearance: none; appearance: none; width: 120px; height: 18px; margin: 0; background: transparent; cursor: pointer; }
+  #power input::-webkit-slider-runnable-track { height: 3px; border-radius: 3px;
+           background: linear-gradient(to right, #e3f1f4 var(--fill, 44%), rgba(227,241,244,.25) var(--fill, 44%)); }
+  #power input::-moz-range-track { height: 3px; border-radius: 3px; background: rgba(227,241,244,.25); }
+  #power input::-moz-range-progress { height: 3px; border-radius: 3px; background: #e3f1f4; }
+  #power input::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5.5px;
+           border-radius: 50%; background: #e3f1f4; border: 2px solid #1b2c37; }
+  #power input::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #e3f1f4; border: 2px solid #1b2c37; }
+  #power input:focus-visible { outline: 2px solid #e3f1f4; outline-offset: 4px; border-radius: 4px; }
+  @media (max-width: 420px) { #power input { width: 84px; } #power, #reset { font-size: 12px; } }
+  #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+             color: #2b4352; font-size: 13px; letter-spacing: .2em; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <img id="bd" alt="" draggable="false">
+  <canvas id="c" aria-label="상관없어 — 不断剥落的动态字体，滑过或点按字体会碎裂"></canvas>
+  <div id="loading">LOADING…</div>
+  <div id="hint"><b>FRACTURES IN INDIFFERENCE</b><br>滑过或点按字体，让它碎裂</div>
+  <label id="power">破碎强度
+    <input id="powerIn" type="range" min="1" max="10" step="1" value="5" aria-label="破碎强度 1 到 10">
+    <output id="powerOut" for="powerIn">5</output></label>
+  <button id="reset" type="button" title="一键复原（快捷键 R）" aria-label="一键复原字体">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8a5.5 5.5 0 1 0 1.7-4"/><path d="M2.5 2.2v3h3"/></svg>复原</button>
+</div>
+<script>
+(() => {
+'use strict';
+const WORLD = 2000;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const stage = document.getElementById('stage');
+const hint = document.getElementById('hint');
+const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const rnd = (a, b) => a + Math.random() * (b - a);
+// skewed random size: mostly near lo, occasionally up to hi (log scale, power-curved)
+const rsize = (lo, hi, skew = 1.8) => lo * Math.pow(hi / lo, Math.pow(Math.random(), skew));
+const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 1.15;
+const pick = arr => arr[(Math.random() * arr.length) | 0];
+const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+const mkCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; };
+
+let meta, backdrop, letters = [], shadows = [], beach = [];
+let scale = 1, dpr = 1;
+
+// ---------- layout ----------
+function resize() {
+  const s = Math.floor(Math.min(innerWidth, innerHeight));
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.style.width = cv.style.height = s + 'px';
+  stage.style.width = stage.style.height = s + 'px';
+  cv.width = cv.height = Math.min(Math.round(s * dpr), WORLD);
+  scale = cv.width / WORLD;
+}
+addEventListener('resize', resize);
+
+function beachY(x) {
+  const t = Math.max(0, Math.min(1, x / WORLD)) * (beach.length - 1);
+  const i = Math.floor(t), f = t - i;
+  return beach[i] * (1 - f) + beach[Math.min(i + 1, beach.length - 1)] * f;
+}
+
+// ---------- shapes ----------
+const stretch = () => Math.random() < 0.22 ? rnd(2.4, 3.8) : rnd(0.75, 2);   // some long thin splinters
+function polyPath(c, cx, cy, r) {
+  const n = 3 + ((Math.random() * 5) | 0), st = stretch(), th = Math.random() * Math.PI;
+  const angs = Array.from({ length: n }, () => Math.random() * Math.PI * 2).sort((a, b) => a - b);
+  c.beginPath();
+  angs.forEach((a, k) => {
+    const rr = r * rnd(0.5, 1), px = Math.cos(a) * rr * st, py = Math.sin(a) * rr;
+    const x = cx + px * Math.cos(th) - py * Math.sin(th), y = cy + px * Math.sin(th) + py * Math.cos(th);
+    k ? c.lineTo(x, y) : c.moveTo(x, y);
+  });
+  c.closePath();
+}
+
+function polyPath2D(cx, cy, r) {           // same irregular polygon as polyPath, as a reusable Path2D
+  const n = 3 + ((Math.random() * 5) | 0), st = stretch(), th = Math.random() * Math.PI, P = new Path2D();
+  const angs = Array.from({ length: n }, () => Math.random() * Math.PI * 2).sort((a, b) => a - b);
+  angs.forEach((a, k) => {
+    const rr = r * rnd(0.5, 1), px = Math.cos(a) * rr * st, py = Math.sin(a) * rr;
+    const x = cx + px * Math.cos(th) - py * Math.sin(th), y = cy + px * Math.sin(th) + py * Math.cos(th);
+    k ? P.lineTo(x, y) : P.moveTo(x, y);
+  });
+  P.closePath(); return P;
+}
+
+// a shard cut out of the letter's own texture around (lx, ly) in letter-local coords
+function cutShard(L, lx, ly, r) {
+  const R = Math.ceil(r * 3.9) + 2;
+  const c = mkCanvas(R * 2, R * 2), g = c.getContext('2d');
+  g.drawImage(L.dmg ? L.work : L.pristine, R - lx, R - ly);
+  g.globalCompositeOperation = 'destination-in';
+  polyPath(g, R, R, r); g.fill();
+  return c;
+}
+
+// glyph sprites: progressively downscaled copies of each letter (keeps the grunge readable when small)
+function buildGlyphs(L) {
+  const sizes = [16, 24, 34, 48, 68, 96];
+  L.glyphs = sizes.map(h => {
+    let src = L.pristine, sw = src.width, sh = src.height;
+    while (sh / 2 > h) {
+      const c = mkCanvas(sw / 2, sh / 2), g = c.getContext('2d');
+      g.imageSmoothingQuality = 'high'; g.drawImage(src, 0, 0, c.width, c.height);
+      src = c; sw = c.width; sh = c.height;
+    }
+    const c = mkCanvas(sw * h / sh, h), g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high'; g.drawImage(src, 0, 0, c.width, c.height);
+    return c;
+  });
+}
+function glyphFor(L, h) {
+  const g = L.glyphs; for (const c of g) if (c.height >= h) return c; return g[g.length - 1];
+}
+
+// ---------- particles ----------
+// depth: 0 far (behind letters, faint, slow), 1 mid (behind), 2 near (in front, dark, a touch larger)
+const DEPTH = [
+  { alpha: 0.55, size: 0.75, speed: 0.7 },
+  { alpha: 0.8,  size: 0.95, speed: 0.88 },
+  { alpha: 1.0,  size: 1.12, speed: 1.0 },
+];
+const parts = [];
+const MAX_PARTS = 2200;
+const SMALL = Math.min(innerWidth, innerHeight) < 700;   // phones: a bit less debris
+const DUST_COLS = ['#1b2c37', '#2d4250', '#41566a', '#566e7d'];
+
+function spawn(p) {
+  if (parts.length >= MAX_PARTS) {          // over budget: replace a random dust speck
+    for (let t = 0; t < 8; t++) { const k = (Math.random() * parts.length) | 0; if (parts[k].kind === 'dust') { parts[k] = p; return; } }
+    parts[(Math.random() * parts.length) | 0] = p; return;
+  }
+  parts.push(p);
+}
+function randDepth(bias) {
+  const r = Math.random() + (bias || 0);
+  return r < 0.33 ? 0 : r < 0.75 ? 1 : 2;
+}
+function makeParticle(L, wx, wy, kind, opts = {}) {
+  const depth = opts.depth ?? randDepth(opts.depthBias);
+  const D = DEPTH[depth];
+  const p = {
+    kind, depth, x: wx, y: wy,
+    vx: (opts.vx || 0) + rnd(-12, 12), vy: (opts.vy || 0) + rnd(-4, 16),
+    a: Math.random() * Math.PI * 2, va: (Math.random() < 0.5 ? -1 : 1) * rsize(0.2, 6, 1.5),
+    hold: opts.hold ?? 0, life: 0, sway: rnd(0.6, 1.6), swayPh: Math.random() * 6.28,
+    alpha: D.alpha, sp: D.speed,
+  };
+  if (kind === 'dust') {
+    p.s = rsize(0.9, 5, 1.6) * D.size; p.col = pick(DUST_COLS); p.tri = Math.random() < 0.5;
+  } else if (kind === 'shard') {
+    const lx = wx - L.x, ly = wy - L.y;
+    p.img = cutShard(L, lx, ly, (opts.r || rnd(3.5, 10)) * D.size);
+    p.va *= 0.8;
+  } else {                                  // glyph: a small copy of a character
+    const src = opts.char ? letters.find(q => q.char === opts.char) || L : L;
+    const h = (opts.h || rnd(13, 30)) * D.size;
+    p.img = glyphFor(src, h); p.gs = h / p.img.height;
+    p.va *= 0.5; if (p.hold) p.a = rnd(-0.3, 0.3);
+  }
+  spawn(p);
+  return p;
+}
+
+// ---------- letters ----------
+function setupLetter(m, img) {
+  const L = { char: m.char, x: m.x, y: m.y, w: m.w, h: m.h, color: m.color, bottom: m.bottom, side: m.side,
+              shake: 0, shx: 0, shy: 0, dmg: 0 };
+  L.pristine = mkCanvas(m.w, m.h); L.pristine.getContext('2d').drawImage(img, 0, 0, m.w, m.h);
+  L.alpha = L.pristine.getContext('2d').getImageData(0, 0, m.w, m.h).data;
+  L.damage = mkCanvas(m.w, m.h); L.dctx = L.damage.getContext('2d');
+  L.work = mkCanvas(m.w, m.h); L.wctx = L.work.getContext('2d');
+  L.gw = Math.ceil(m.w / 4); L.gh = Math.ceil(m.h / 4); L.grid = new Uint8Array(L.gw * L.gh);  // 1 = broken away
+  L.dirty = false; L.restore = 0;
+  L.rate = (m.w * m.h) / (750 * 928);       // bigger letters shed more
+  buildGlyphs(L);
+  return L;
+}
+function broken(L, x, y) { return L.grid[((y >> 2) * L.gw) + (x >> 2)] === 1; }
+function setupShadow(m, img, L) {
+  const S = { char: m.char, x: m.x, y: m.y, w: m.w, h: m.h, s: m.s, rgb: `rgb(${m.color.join(',')})`,
+              shake: 0, shx: 0, shy: 0, dmg: 0, dirty: false, restore: 0 };
+  S.pristine = mkCanvas(m.w, m.h); S.pristine.getContext('2d').drawImage(img, 0, 0, m.w, m.h);
+  S.damage = mkCanvas(m.w, m.h); S.dctx = S.damage.getContext('2d');
+  S.work = mkCanvas(m.w, m.h); S.wctx = S.work.getContext('2d');
+  // world point on the letter -> world point on the shadow (rotation + scale fitted from the PSD)
+  const th = m.th * Math.PI / 180, c = Math.cos(th), sn = Math.sin(th), s = m.s;
+  const [cmx, cmy] = m.cm, [csx, csy] = m.cs;
+  S.toShadow = (wx, wy) => { const dx = wx - cmx, dy = wy - cmy; return [csx + s * (c * dx + sn * dy), csy + s * (-sn * dx + c * dy)]; };
+  // same map as a canvas transform: letter-local coords -> shadow-local coords
+  S.ta = s * c; S.tb = -s * sn; S.tc = s * sn; S.td = s * c;
+  const o = S.toShadow(L.x, L.y); S.te = o[0] - S.x; S.tf = o[1] - S.y;
+  L.shadow = S;
+  return S;
+}
+function alphaAt(L, wx, wy) {
+  const x = Math.round(wx - L.x), y = Math.round(wy - L.y);
+  if (x < 0 || y < 0 || x >= L.w || y >= L.h || broken(L, x, y)) return 0;
+  return L.alpha[(y * L.w + x) * 4 + 3];
+}
+function markGrid(L, lx, ly, r) {
+  const r4 = r / 4, cx = lx / 4, cy = ly / 4;
+  for (let gy = Math.max(0, Math.floor(cy - r4)); gy <= Math.min(L.gh - 1, Math.ceil(cy + r4)); gy++)
+    for (let gx = Math.max(0, Math.floor(cx - r4)); gx <= Math.min(L.gw - 1, Math.ceil(cx + r4)); gx++)
+      if ((gx - cx) ** 2 + (gy - cy) ** 2 <= r4 * r4) L.grid[gy * L.gw + gx] = 1;
+}
+function hitLetter(wx, wy) {
+  for (let i = letters.length - 1; i >= 0; i--) if (alphaAt(letters[i], wx, wy) > 70) return letters[i];
+  return null;
+}
+function chip(L, wx, wy, r) {               // punch an irregular hole where the letter broke
+  const g = L.dctx; g.fillStyle = '#000';
+  const lx = wx - L.x, ly = wy - L.y, paths = [polyPath2D(lx, ly, r)];
+  markGrid(L, lx, ly, r * 0.75);
+  const nh = 1 + ((Math.random() * 5) | 0);
+  for (let k = 0; k < nh; k++) {
+    const ox = lx + rnd(-r, r) * 1.2, oy = ly + rnd(-r, r) * 1.2, rr = r * rsize(0.15, 0.7);
+    paths.push(polyPath2D(ox, oy, rr)); markGrid(L, ox, oy, rr * 0.7);
+  }
+  for (const P of paths) g.fill(P);
+  L.dmg = 1; L.dirty = true; L.restore = 0;
+  const S = L.shadow;                        // the shadow breaks in the same place, with the same shape
+  if (S) {
+    const h = S.dctx; h.fillStyle = '#000';
+    h.setTransform(S.ta, S.tb, S.tc, S.td, S.te, S.tf);
+    for (const P of paths) h.fill(P);
+    h.setTransform(1, 0, 0, 1, 0, 0);
+    S.dmg = 1; S.dirty = true; S.restore = 0;
+    S.shake = Math.min(S.shake + 0.8 * Math.sqrt(I), 4);
+    const q = S.toShadow(wx, wy), nd = sRound(4 * I * r / 12);          // a little grey dust off the shadow
+    for (let k = 0; k < nd; k++) {
+      const p = makeParticle(L, q[0] + rnd(-r, r) * S.s, q[1] + rnd(-r, r) * S.s, 'dust',
+        { depth: 0, vx: rnd(-40, 40), vy: rnd(-30, 10) });
+      p.col = S.rgb; p.alpha = 0.35; p.s *= 1.2;
+    }
+  }
+  updateReset();
+}
+
+// ---------- ambient shedding ----------
+function ambient(L, dt) {
+  const rate = (reduce ? 30 : SMALL ? 80 : 115) * L.rate;  // particles per second for this letter
+  let n = rate * dt; while (n > 0) {
+    if (Math.random() < n) {
+      const pts = Math.random() < 0.8 ? L.bottom : L.side;
+      const [px, py] = pick(pts);
+      if (broken(L, px, py)) { n -= 1; continue; }
+      const wx = L.x + px + rnd(-2, 2), wy = L.y + py + rnd(-1, 3);
+      const r = Math.random();
+      const hold = Math.random() < 0.62 ? rnd(0.3, 5.5) : 0;    // many chips cling for a while first
+      const an = Math.random() * Math.PI * 2, sp = rsize(4, 70, 1.4);           // random push-off direction
+      const v = { vx: Math.cos(an) * sp, vy: Math.sin(an) * sp * 0.7 };
+      if (r < 0.58) makeParticle(L, wx, wy, 'dust', { hold, ...v });
+      else if (r < 0.88) makeParticle(L, wx, wy, 'shard', { hold, r: rsize(2.5, 24, 2.2), ...v });
+      else makeParticle(L, wx, wy + 6, 'glyph', { hold: hold * 0.6, char: Math.random() < 0.75 ? L.char : pick(letters).char, h: rsize(14, 70, 1.6), ...v });
+    }
+    n -= 1;
+  }
+}
+
+// ---------- interaction ----------
+let pointer = null, travel = 0, interacted = false;
+function toWorld(e) {
+  const r = cv.getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width * WORLD, (e.clientY - r.top) / r.height * WORLD];
+}
+// break strength: slider 1–10, 5 = default. I runs from ~0.33 (1) through 1 (5) to ~4 (10)
+let I = 1;
+const sRound = v => Math.floor(v) + (Math.random() < v % 1 ? 1 : 0);   // fractional counts, rounded stochastically
+function burst(L, wx, wy, strength, pvx, pvy) {
+  const big = strength > 1.5;
+  chip(L, wx, wy, (big ? rnd(20, 32) : rnd(8, 15)) * Math.pow(I, 0.6));
+  L.shake = Math.min(L.shake + (big ? 6 : 1.6) * Math.sqrt(I), 8 * Math.max(1, Math.sqrt(I)));
+  const nShard = sRound((big ? 18 : 3 + Math.random() * 3) * I);
+  const nGlyph = sRound((big ? 8 : (Math.random() < 0.7 ? 1 + (Math.random() < 0.35) : 0)) * I);
+  const nDust = sRound((big ? 34 : 7) * I);
+  const kick = (big ? 140 : 60) * Math.sqrt(I);
+  const rS = Math.pow(I, 0.4), hS = Math.pow(I, 0.3);
+  // each break picks its own main direction; every piece scatters around it (some go anywhere at all)
+  const dir = Math.random() * Math.PI * 2, spread = rnd(0.5, 1.6), carry = rnd(-0.1, 0.3);
+  const angle = () => Math.random() < 0.3 ? Math.random() * Math.PI * 2 : dir + gauss() * spread;
+  const speed = m => kick * m * Math.pow(Math.random(), 0.7) * rnd(0.3, 1.4);
+  const off = strength * 9;
+  for (let k = 0; k < nShard; k++) {
+    const an = angle(), sp = speed(1);
+    makeParticle(L, wx + rnd(-off, off), wy + rnd(-off, off), 'shard', {
+      vx: Math.cos(an) * sp + pvx * carry, vy: Math.sin(an) * sp * 0.75 + pvy * carry,
+      r: (big ? rsize(3, 34, 1.6) : rsize(2.5, 20, 2)) * rS, depthBias: rnd(-0.1, 0.4) });
+  }
+  for (let k = 0; k < nGlyph; k++) {
+    const an = angle(), sp = speed(0.85);
+    makeParticle(L, wx + rnd(-off, off), wy + rnd(-off, off), 'glyph', {
+      vx: Math.cos(an) * sp + pvx * carry, vy: Math.sin(an) * sp * 0.75 + pvy * carry,
+      char: L.char, h: (big ? rsize(16, 90, 1.5) : rsize(14, 56, 1.7)) * hS, depthBias: rnd(-0.1, 0.4) });
+  }
+  for (let k = 0; k < nDust; k++) {
+    const an = angle(), sp = speed(1.3);
+    makeParticle(L, wx + rnd(-off, off), wy + rnd(-off, off), 'dust', {
+      vx: Math.cos(an) * sp + pvx * carry, vy: Math.sin(an) * sp * 0.75 + pvy * carry, depthBias: 0.2 });
+  }
+}
+function dismissHint() { if (!interacted) { interacted = true; setTimeout(() => hint.classList.add('gone'), 1800); } }
+cv.addEventListener('pointermove', e => {
+  const [wx, wy] = toWorld(e), t = performance.now();
+  if (pointer) {
+    const dx = wx - pointer.x, dy = wy - pointer.y, dtm = Math.max(1, t - pointer.t) / 1000;
+    const L = hitLetter(wx, wy);
+    if (L) {
+      travel += Math.hypot(dx, dy);
+      const vx = Math.max(-600, Math.min(600, dx / dtm)), vy = Math.max(-600, Math.min(600, dy / dtm));
+      while (travel > 16) { travel -= 16; burst(L, wx - dx * Math.random(), wy - dy * Math.random(), 1, vx, vy); }
+      dismissHint();
+    } else travel = 0;
+  }
+  pointer = { x: wx, y: wy, t };
+});
+cv.addEventListener('pointerdown', e => {
+  const [wx, wy] = toWorld(e);
+  pointer = { x: wx, y: wy, t: performance.now() };
+  const L = hitLetter(wx, wy);
+  if (L) { burst(L, wx, wy, 2.2, 0, 0); dismissHint(); }
+});
+cv.addEventListener('pointerleave', () => { pointer = null; travel = 0; });
+const resetBtn = document.getElementById('reset');
+function updateReset() { resetBtn.classList.toggle('on', letters.some(L => L.dmg && !L.restore)); }
+function restoreAll() {
+  for (const L of letters) {
+    if (!L.dmg) continue;
+    L.restore = 0.7; L.grid.fill(0); L.shake = Math.max(L.shake, 1.5);
+  }
+  for (const S of shadows) if (S.dmg) { S.restore = 0.7; S.shake = Math.max(S.shake, 0.8); }
+  resetBtn.classList.remove('on');
+}
+resetBtn.addEventListener('click', e => { e.stopPropagation(); restoreAll(); });
+const powerIn = document.getElementById('powerIn'), powerOut = document.getElementById('powerOut');
+function setPower(v) {
+  v = Math.max(1, Math.min(10, Math.round(+v) || 5));
+  powerIn.value = v; powerOut.textContent = v;
+  powerIn.style.setProperty('--fill', ((v - 1) / 9 * 100) + '%');
+  I = Math.pow(2, (v - 5) / 2.5);
+  try { localStorage.setItem('fracture-power', v); } catch (_) {}
+}
+powerIn.addEventListener('input', () => setPower(powerIn.value));
+try { setPower(localStorage.getItem('fracture-power') || 5); } catch (_) { setPower(5); }
+addEventListener('keydown', e => { if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey) restoreAll(); });
+
+// ---------- simulation ----------
+const G = 95;                                // gravity (world px / s^2) — slow, drifting fall
+let time = 0;
+function step(dt) {
+  time += dt;
+  for (const L of letters) ambient(L, dt);
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.life += dt;
+    if (p.fade !== undefined) {                // landed: sink a touch and dissolve, leaving nothing behind
+      p.fade -= dt; p.y += 6 * dt; p.alpha = p.alpha0 * Math.max(0, p.fade / p.fadeMax);
+      if (p.fade <= 0) { parts[i] = parts[parts.length - 1]; parts.pop(); }
+      continue;
+    }
+    if (p.hold > 0) {                          // still clinging to the edge: tremble a little
+      p.hold -= dt; p.x += Math.sin(time * 30 + p.swayPh) * 0.05; continue;
+    }
+    const sp = p.sp;
+    p.vy += G * sp * dt;
+    p.vx *= 1 - 0.9 * dt; p.vy *= 1 - 0.35 * dt;        // air drag → gentle terminal velocity
+    p.x += (p.vx + Math.sin(time * p.sway + p.swayPh) * 9) * dt * sp;
+    p.y += p.vy * dt * sp;
+    p.a += p.va * dt;
+    const land = beachY(p.x) + (p.depth === 2 ? rnd(30, 120) : p.depth === 1 ? rnd(5, 70) : rnd(-15, 30));
+    if (p.x < -60 || p.x > WORLD + 60 || p.y > WORLD + 40) {
+      parts[i] = parts[parts.length - 1]; parts.pop();
+    } else if (p.y > land) {
+      p.fadeMax = p.fade = rnd(0.35, 0.9); p.alpha0 = p.alpha;
+    }
+  }
+  for (const L of letters.concat(shadows)) {
+    if (L.shake > 0.01) { L.shake *= Math.pow(0.02, dt); L.shx = rnd(-1, 1) * L.shake; L.shy = rnd(-1, 1) * L.shake * 0.6; }
+    else { L.shake = 0; L.shx = L.shy = 0; }
+  }
+}
+// damage stays until the restore button is pressed; restoring fades the holes closed over ~0.7 s
+function updateLetters(dt) {
+  for (const L of letters.concat(shadows)) {
+    if (!L.dmg) continue;
+    if (L.restore > 0) {
+      L.restore -= dt;
+      const g = L.dctx; g.save(); g.globalCompositeOperation = 'destination-out';
+      g.fillStyle = `rgba(0,0,0,${Math.min(1, 6 * dt)})`; g.fillRect(0, 0, L.w, L.h); g.restore();
+      L.dirty = true;
+      if (L.restore <= 0) { L.restore = 0; L.dmg = 0; g.clearRect(0, 0, L.w, L.h); continue; }
+    }
+    if (!L.dirty) continue;
+    L.dirty = false;
+    const w = L.wctx; w.globalCompositeOperation = 'source-over'; w.clearRect(0, 0, L.w, L.h);
+    w.drawImage(L.pristine, 0, 0); w.globalCompositeOperation = 'destination-out'; w.drawImage(L.damage, 0, 0);
+    w.globalCompositeOperation = 'source-over';
+  }
+}
+
+// ---------- drawing ----------
+function drawPart(c, p, sc, oy) {
+  const cs = Math.cos(p.a) * sc, sn = Math.sin(p.a) * sc;
+  c.setTransform(cs, sn, -sn, cs, p.x * sc, (p.y + oy) * sc);
+  if (p.kind === 'dust') {
+    c.fillStyle = p.col;
+    if (p.tri) { c.beginPath(); c.moveTo(-p.s, p.s * 0.6); c.lineTo(p.s, p.s * 0.7); c.lineTo(0, -p.s); c.fill(); }
+    else c.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.8);
+    return;
+  }
+  const img = p.img, s = p.kind === 'glyph' ? p.gs : 1, w = img.width * s, h = img.height * s;
+  c.drawImage(img, -w / 2, -h / 2, w, h);
+}
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  for (const p of parts) if (p.depth < 2) { ctx.globalAlpha = p.alpha; drawPart(ctx, p, scale, 0); }
+  ctx.setTransform(scale, 0, 0, scale, 0, 0); ctx.globalAlpha = 1;
+  for (const S of shadows) ctx.drawImage(S.dmg ? S.work : S.pristine, S.x + S.shx, S.y + S.shy);
+  for (const L of letters) ctx.drawImage(L.dmg ? L.work : L.pristine, L.x + L.shx, L.y + L.shy);
+  for (const p of parts) if (p.depth === 2) { ctx.globalAlpha = p.alpha; drawPart(ctx, p, scale, 0); }
+  ctx.globalAlpha = 1;
+}
+
+let last = 0;
+function frame(t) {
+  const dt = Math.min(0.05, (t - last) / 1000 || 0.016); last = t;
+  step(dt); updateLetters(dt); draw();
+  requestAnimationFrame(frame);
+}
+
+// ---------- boot ----------
+(async () => {
+  try {
+    meta = await (await fetch('assets/meta.json')).json();
+    beach = meta.beach;
+    const imgs = await Promise.all([loadImg('assets/backdrop.jpg'), ...meta.letters.map(m => loadImg('assets/' + m.file)),
+                                    ...meta.shadows.map(m => loadImg('assets/' + m.file))]);
+    backdrop = imgs[0]; document.getElementById('bd').src = backdrop.src;
+    letters = meta.letters.map((m, i) => setupLetter(m, imgs[i + 1]));
+    const nL = meta.letters.length;
+    shadows = meta.shadows.map((m, i) => setupShadow(m, imgs[nL + 1 + i], letters.find(L => L.char === m.char)));
+    resize();
+    for (let k = 0; k < 300; k++) step(1 / 30);      // pre-warm: start with debris already falling
+    document.getElementById('loading').remove();
+    requestAnimationFrame(t => { last = t; frame(t); });
+  } catch (err) {
+    document.getElementById('loading').textContent = '加载失败 · ' + err.message;
+  }
+})();
+})();
+</script>
+
+<a href="../" class="psite-back" aria-label="返回全部海报">← 全部海报</a>
+<style>
+.psite-back{position:fixed;z-index:2147483000;top:max(10px,env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));
+  padding:6px 11px;border-radius:999px;font:500 12px/1.2 -apple-system,"PingFang SC","Noto Sans SC","Noto Sans KR",sans-serif;letter-spacing:.06em;
+  color:#fff;background:rgba(20,19,18,.55);text-decoration:none;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  opacity:.75;transition:opacity .2s;touch-action:manipulation}
+.psite-back:hover,.psite-back:focus-visible{opacity:1}
+.psite-back:focus-visible{outline:2px solid #fff;outline-offset:2px}
+</style>
+</body>
+</html>
