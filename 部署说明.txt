@@ -1,0 +1,26 @@
+상관없어 · 三张可交互海报 —— 静态网站
+
+文件结构
+  index.html        首页（三张海报入口）
+  tear/             01 상관없이 撕与缝
+  pop/              02 상관없어 팝
+  fractures/        03 Fractures in Indifference
+  thumbs/           首页缩略图
+
+注意：不要直接双击 index.html 在本地打开——第 03 张需要从服务器读取素材，只有部署到网上（或用本地服务器）才能正常运行。
+
+部署方法（任选其一，均免费）
+
+A. Netlify Drop（最快，约 1 分钟）
+  1. 解压后得到 sanggwan-posters 文件夹。
+  2. 打开 https://app.netlify.com/drop ，把整个 sanggwan-posters 文件夹拖进网页。
+  3. 上传完会得到一个 https://xxxx.netlify.app 的公开网址。注册/登录后可以改成好记的名字，否则临时站点会在一段时间后失效。
+
+B. GitHub Pages（长期稳定）
+  1. 在 GitHub 新建一个公开仓库，把 sanggwan-posters 文件夹里的全部内容（不是文件夹本身）上传到仓库根目录。
+  2. 仓库 Settings → Pages → Source 选 “Deploy from a branch”，分支选 main、目录选 /(root)，保存。
+  3. 一两分钟后网址为 https://你的用户名.github.io/仓库名/
+
+C. Vercel / Cloudflare Pages 也可以，直接上传这个文件夹即可，不需要任何构建设置。
+
+放进 PowerPoint：部署后，用 PowerPoint 的 Web Viewer 加载项填入上面的 https 网址（可以填首页，也可以直接填某一张，例如 …/tear/）。
